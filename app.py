@@ -86,6 +86,18 @@ with st.expander("Model quick metrics (held-out test split)", expanded=False):
     c2.metric("F1", f"{metrics['f1']:.3f}")
     c3.metric("RMSE", f"{metrics['rmse']:.3f}")
 
+# --- User Role Selection ---
+role = st.radio(
+    "Select User Role:",
+    [
+        "Domain Specialists",
+        "Regulators & Governance Bodies",
+        "End Users (Patients)",
+        "Data Scientists & AI Developers",
+    ],
+    horizontal=True
+)
+
 st.divider()
 
 left, right = st.columns([0.9, 1.6], gap="large")
@@ -115,12 +127,13 @@ with left:
         "Age": age,
     }
 
-    predict_btn = st.button("🔎 Predict", type="primary", use_container_width=True)
+    if st.button("🔎 Predict", type="primary", use_container_width=True):
+        st.session_state["predict_clicked"] = True
 
 with right:
     st.subheader("2) Results & explanations")
 
-    if not predict_btn:
+    if not st.session_state.get("predict_clicked", False):
         st.info("Fill in the inputs on the left, then click **Predict**.")
     else:
         query_df = make_input_df(user_vals)
@@ -140,38 +153,48 @@ with right:
         st.divider()
 
         # -------- SHAP local: waterfall --------
-        st.markdown("### Local explanation (SHAP waterfall)")
-        shap_values = explainer(query_df)  # Explanation object (n=1)
+        if role in [
+            "Domain Specialists",
+            "End Users (Patients)",
+            "Data Scientists & AI Developers",
+        ]:
+            st.markdown("### Local explanation (SHAP waterfall)")
+            shap_values = explainer(query_df)  # Explanation object (n=1)
 
-        # fig1 = plt.figure()
-        # shap.plots.waterfall(shap_values[0], show=False)
-        # st.pyplot(fig1, clear_figure=True)
+            # fig1 = plt.figure()
+            # shap.plots.waterfall(shap_values[0], show=False)
+            # st.pyplot(fig1, clear_figure=True)
 
-        plot_col, _ = st.columns([1, 1])  # left half only
+            plot_col, _ = st.columns([1, 1])  # left half only
 
-        with plot_col:
-            fig1 = plt.figure(figsize=(3.2, 2.4))  # FIXED SIZE
-            shap.plots.waterfall(shap_values[0], show=False)
-            st.pyplot(fig1, clear_figure=True)
+            with plot_col:
+                fig1 = plt.figure(figsize=(3.2, 2.4))  # FIXED SIZE
+                shap.plots.waterfall(shap_values[0], show=False)
+                st.pyplot(fig1, clear_figure=True)
 
         # -------- SHAP global: summary (sampled) --------
-        st.markdown("### Global explanation (SHAP summary, sampled)")
-        # st.caption("This is computed on a sample to keep the dashboard responsive.")
-        # sample_n = min(300, len(X_test))
-        # X_samp = X_test.sample(sample_n, random_state=42)
-        X_samp = X_test.copy()
-        sv_samp = explainer(X_samp)
+        if role in [
+            "Domain Specialists",
+            "Regulators & Governance Bodies",
+            "Data Scientists & AI Developers",
+        ]:
+            st.markdown("### Global explanation (SHAP summary, sampled)")
+            # st.caption("This is computed on a sample to keep the dashboard responsive.")
+            # sample_n = min(300, len(X_test))
+            # X_samp = X_test.sample(sample_n, random_state=42)
+            X_samp = X_test.copy()
+            sv_samp = explainer(X_samp)
 
-        # fig2 = plt.figure()
-        # shap.summary_plot(sv_samp.values, X_samp, show=False)
-        # st.pyplot(fig2, clear_figure=True)
+            # fig2 = plt.figure()
+            # shap.summary_plot(sv_samp.values, X_samp, show=False)
+            # st.pyplot(fig2, clear_figure=True)
 
-        plot_col, _ = st.columns([1, 1])  # left half only
+            plot_col, _ = st.columns([1, 1])  # left half only
 
-        with plot_col:
-            fig2 = plt.figure(figsize=(3.2, 2.4))  # FIXED SIZE
-            shap.summary_plot(sv_samp.values, X_samp, show=False)
-            st.pyplot(fig2, clear_figure=True)
+            with plot_col:
+                fig2 = plt.figure(figsize=(3.2, 2.4))  # FIXED SIZE
+                shap.summary_plot(sv_samp.values, X_samp, show=False)
+                st.pyplot(fig2, clear_figure=True)
 
         # Optional: dependence plot for Glucose
         # st.markdown("### Feature dependence (Glucose)")
@@ -182,19 +205,20 @@ with right:
         st.divider()
 
         # -------- DiCE counterfactuals --------
-        st.markdown("### Counterfactuals (DiCE)")
-        st.caption("Suggested minimal changes to flip the prediction (method=random).")
+        if role in ["End Users (Patients)", "Data Scientists & AI Developers"]:
+            st.markdown("### Counterfactuals (DiCE)")
+            st.caption("Suggested minimal changes to flip the prediction (method=random).")
 
-        try:
-            cf = dice_exp.generate_counterfactuals(
-                query_df,
-                total_CFs=3,
-                desired_class="opposite",
-            )
-            cf_df = cf.cf_examples_list[0].final_cfs_df
-            st.dataframe(cf_df, use_container_width=True)
-        except Exception as e:
-            st.warning("Counterfactual generation failed on this run.")
-            st.exception(e)
+            try:
+                cf = dice_exp.generate_counterfactuals(
+                    query_df,
+                    total_CFs=3,
+                    desired_class="opposite",
+                )
+                cf_df = cf.cf_examples_list[0].final_cfs_df
+                st.dataframe(cf_df, use_container_width=True)
+            except Exception as e:
+                st.warning("Counterfactual generation failed on this run.")
+                st.exception(e)
 
 st.caption("Note: This is a mock dashboard for demonstration. Do not use as medical advice.")
