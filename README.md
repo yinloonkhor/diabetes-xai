@@ -30,6 +30,24 @@ A comprehensive Jupyter notebook containing:
 - XAI technique demonstrations
 - Visualizations and analysis
 
+## Key Features
+
+### User Role Personalization
+The application tailors the experience based on the selected stakeholder role:
+- **Domain Specialists**: Focuses on clinical plausibility and feature importance (SHAP).
+- **Regulators & Governance Bodies**: Emphasizes global model behavior, transparency, and fairness (SHAP Global Summary).
+- **End Users (Patients)**: Provides simplified, empathetic explanations and actionable counterfactual examples (DiCE).
+- **Data Scientists & AI Developers**: Offers technical depth with full access to model metrics, SHAP plots, and detailed counterfactuals.
+
+### LLM-Powered Explanations (AI Specialist)
+Integrated with **Groq's API**, the app generates context-aware natural language explanations for each prediction. The AI acts as a specialized assistant, dynamically adjusting its tone and content focus according to the selected user role:
+- **For Domain Specialists**: Analyzes risk factors like Glucose and BMI in a clinical context.
+- **For Regulators**: Discusses alignment with clinical guidelines and model safety.
+- **For Patients**: Offers non-technical, reassuring advice and lifestyle suggestions.
+- **For Data Scientists**: Breaks down prediction probabilities and feature contributions.
+
+*Note: Requires a `GROQ_API_KEY` in the `.env` file to function.*
+
 ## Installation
 
 Install the required dependencies:
