@@ -4,3 +4,5 @@ matplotlib
 imbalanced-learn
 streamlit
 pandas
+langchain-groq
+python-dotenv

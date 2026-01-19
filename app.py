@@ -12,6 +12,12 @@ import shap
 import matplotlib.pyplot as plt
 
 import dice_ml
+import os
+from dotenv import load_dotenv
+from langchain_groq import ChatGroq
+from langchain_core.prompts import ChatPromptTemplate
+
+load_dotenv()
 
 
 st.set_page_config(page_title="Diabetes XAI Dashboard", layout="wide")
@@ -159,6 +165,14 @@ with right:
             "Data Scientists & AI Developers",
         ]:
             st.markdown("### Local explanation (SHAP waterfall)")
+            if role == "End Users (Patients)":
+                st.info(
+                    "This chart shows how your specific health numbers increased (red) or decreased (blue) the risk prediction."
+                )
+            else:
+                st.info(
+                    "Visualizing feature contributions for this specific prediction. Red = higher risk, Blue = lower risk."
+                )
             shap_values = explainer(query_df)  # Explanation object (n=1)
 
             # fig1 = plt.figure()
@@ -179,6 +193,10 @@ with right:
             "Data Scientists & AI Developers",
         ]:
             st.markdown("### Global explanation (SHAP summary, sampled)")
+            st.info(
+                "This summary shows the overall importance of features across the population. "
+                "Higher positions mean more importance. Colors show if high/low values increase risk."
+            )
             # st.caption("This is computed on a sample to keep the dashboard responsive.")
             # sample_n = min(300, len(X_test))
             # X_samp = X_test.sample(sample_n, random_state=42)
@@ -207,7 +225,12 @@ with right:
         # -------- DiCE counterfactuals --------
         if role in ["End Users (Patients)", "Data Scientists & AI Developers"]:
             st.markdown("### Counterfactuals (DiCE)")
-            st.caption("Suggested minimal changes to flip the prediction (method=random).")
+            if role == "End Users (Patients)":
+                st.info(
+                    "These examples show what small changes in your health numbers could have led to a different result."
+                )
+            else:
+                st.caption("Suggested minimal changes to flip the prediction (method=random).")
 
             try:
                 cf = dice_exp.generate_counterfactuals(
@@ -220,5 +243,66 @@ with right:
             except Exception as e:
                 st.warning("Counterfactual generation failed on this run.")
                 st.exception(e)
+
+        st.divider()
+
+        # -------- LLM Explanation (Groq) --------
+        st.markdown("### AI Specialist Explanation")
+        
+        if not os.environ.get("GROQ_API_KEY"):
+            st.warning("Please set GROQ_API_KEY in your .env file to generate AI explanations.")
+        else:
+            if st.button("Generate Explanation"):
+                try:
+                    llm = ChatGroq(model="openai/gpt-oss-20b", temperature=0.7)
+                    
+                    system_prompt = "You are an expert medical AI assistant specialized in explaining diabetes risk models to different audiences."
+                    
+                    role_instructions = {
+                        "Domain Specialists": "Focus on clinical plausibility, common risk factors like Glucose/BMI, and how the model aligns with medical knowledge.",
+                        "Regulators & Governance Bodies": "Focus on model transparency, potential fairness concerns, and how the prediction aligns with standard clinical guidelines.",
+                        "End Users (Patients)": "Use simple, empathetic, non-technical language. Focus on actionable insights (e.g., diet, exercise) and clarify that this is a screening tool, not a diagnosis.",
+                        "Data Scientists & AI Developers": "Focus on feature contribution (SHAP), prediction probability, and technical model behavior.",
+                    }
+                    
+                    specific_instruction = role_instructions.get(role, "Explain the result clearly to the audience.")
+
+                    user_prompt_template = """
+                    The model predicts {outcome} with probability {proba:.2f}.
+                    
+                    Patient Features:
+                    {features}
+                    
+                    Target Audience: {role}
+                    
+                    Instruction: {instruction}
+                    
+                    Keep the explanation concise (max 150 words).
+                    """
+                    
+                    prompt = ChatPromptTemplate.from_messages([
+                        ("system", system_prompt),
+                        ("user", user_prompt_template),
+                    ])
+                    
+                    chain = prompt | llm
+                    
+                    features_str = "\n".join([f"- {k}: {v}" for k, v in user_vals.items()])
+                    outcome_str = "Diabetes (High Risk)" if pred == 1 else "No Diabetes (Low Risk)"
+                    
+                    with st.spinner("Generating explanation..."):
+                        response = chain.invoke({
+                            "outcome": outcome_str,
+                            "proba": proba,
+                            "features": features_str,
+                            "role": role,
+                            "instruction": specific_instruction
+                        })
+                        
+                    st.success("Explanation Generated:")
+                    st.write(response.content)
+                    
+                except Exception as e:
+                    st.error(f"Error generating explanation: {str(e)}")
 
 st.caption("Note: This is a mock dashboard for demonstration. Do not use as medical advice.")
